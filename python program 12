@@ -1,0 +1,78 @@
+
+class State:
+    def __init__(self, rule, dot_position, start_position):
+        self.rule = rule
+        self.dot_position = dot_position
+        self.start_position = start_position
+
+    def __eq__(self, other):
+        return self.rule == other.rule and \
+               self.dot_position == other.dot_position and \
+               self.start_position == other.start_position
+
+    def __repr__(self):
+        return f"({self.rule}, {self.dot_position}, {self.start_position})"
+
+
+def predict(states, grammar, position):
+    predicted_states = set()
+    for state in states:
+        next_symbol = state.rule[state.dot_position]
+        if next_symbol in grammar:
+            for production in grammar[next_symbol]:
+                predicted_states.add(State(production, 0, position))
+    return predicted_states
+
+
+def scan(states, word, position):
+    return {State(state.rule, state.dot_position + 1, state.start_position)
+            for state in states
+            if state.dot_position < len(state.rule) and state.rule[state.dot_position] == word}
+
+
+def complete(states, state):
+    completed_states = set()
+    for s in states:
+        if s.dot_position < len(s.rule) and s.rule[s.dot_position] == state.rule[0] \
+                and s.dot_position > s.start_position:
+            completed_states.add(State(s.rule, s.dot_position + 1, s.start_position))
+    return completed_states
+
+
+def earley_parser(grammar, input_string):
+    chart = [[] for _ in range(len(input_string) + 1)]
+    chart[0] = predict({State(("S'", "S"), 0, 0)}, grammar, 0)
+
+    for i in range(len(input_string) + 1):
+        for state in chart[i]:
+            if state.dot_position < len(state.rule):
+                if state.rule[state.dot_position] in grammar:
+                    chart[i] |= predict({state}, grammar, i)
+                else:
+                    if i < len(input_string):
+                        chart[i + 1] |= scan({state}, input_string[i], i)
+            else:
+                chart[i] |= complete(chart[state.start_position], state)
+
+    return any(state.rule == ("S'", "S") and state.dot_position == 2 and state.start_position == 0
+               for state in chart[len(input_string)])
+
+
+# Example usage:
+grammar = {
+    "S": [("NP", "VP")],
+    "NP": [("Det", "N"), ("NP", "PP")],
+    "VP": [("V", "NP"), ("VP", "PP")],
+    "PP": [("P", "NP")],
+    "Det": ["the", "a"],
+    "N": ["man", "woman", "dog", "cat"],
+    "V": ["bit", "chased"],
+    "P": ["with", "in"]
+}
+
+input_string = "the man bit the dog"
+
+if earley_parser(grammar, input_string.split()):
+    print("Accepted")
+else:
+    print("Rejected")
